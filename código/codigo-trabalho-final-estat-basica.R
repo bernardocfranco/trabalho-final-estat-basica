@@ -74,7 +74,7 @@ df <- df |>
   mutate(
     exp_car_imputado = is.na(exp_car),
     exp_car = case_when(
-      is.na(exp_car) ~ 0,
+      exp_car == 0   ~ NA,
       exp_car == 2   ~ 2,
       exp_car == 3   ~ 2,
       exp_car == 5   ~ 3,
@@ -98,7 +98,7 @@ df <- df |>
     )
   )
 
-## Validar correção de valores inadequados na variável 'inst' em df
+## Validar correção de valores inadequados na variável 'instr' em df
 
 df |>
   group_by(instr) |>
@@ -115,16 +115,14 @@ limites <- tibble::tibble(
 df <- df |>
   mutate(
     entrada = as.Date(entrada),
-    indicacao_corrigida = case_when(
+    indicacao = case_when(
       entrada <= as.Date("2010-12-31") ~ "Lula",
       entrada <= as.Date("2016-05-11") ~ "Rousseff",
       entrada <= as.Date("2018-12-31") ~ "Temer",
       entrada <= as.Date("2022-12-31") ~ "Bolsonaro",
       TRUE ~ NA_character_
-    ),
-    indicacao_divergente = indicacao != indicacao_corrigida
+    )
   )
-
 ## Validar correção de valores inadequados na variável 'indicacao' em df
 
 df |>
