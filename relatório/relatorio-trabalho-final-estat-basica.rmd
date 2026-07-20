@@ -3,14 +3,825 @@ title: "Trabalho Final | FLS5028"
 author: "Bernardo Franco"
 date: "`r Sys.Date()`"
 output: pdf_document
+header-includes:
+  - \usepackage{xcolor}
+  - \definecolor{steelblue}{RGB}{70,130,180}
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,breakanywhere,commandchars=\\\{\}}
+  - \usepackage{enumitem}
+  - \usepackage[brazilian]{babel}
+  - \widowpenalty=10000
+  - \clubpenalty=10000
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Perguntas obrigatórias (graduação e pós-graduação)
+## Perguntas obrigatórias (graduação e pós-graduação)
 
-## Artigo, pergunta e unidade de análise
+### 1. Artigo, pergunta e unidade de análise
 
- 
+\textcolor{steelblue}{Responda em texto:}
+
+\textcolor{steelblue}{1. Qual é a pergunta geral do artigo?}
+
+O artigo investiga como se dão as nomeações a cargos públicos de médio e alto escalão no Executivo Federal brasileiro, questionando se os perfis dos nomeados variam conforme a natureza das políticas de cada pasta. O ponto de fundo é testar dois aspectos da literatura: as previsões teóricas sobre a relação entre área de política e perfil da burocracia, e a validade de usar a filiação partidária como *proxy* para identificar atuação política.
+
+\textcolor{steelblue}{2. Qual é a unidade de análise da base?}
+
+A unidade de análise é a nomeação.
+
+\textcolor{steelblue}{3. O que significa uma linha da base?}
+
+Cada linha corresponde a uma nomeação de um funcionário para um cargo comissionado (DAS ou FCPE) de níveis 4 a 6, com as informações sobre o perfil e a trajetória daquela pessoa no momento em que foi nomeada.
+
+\textcolor{steelblue}{4. Por que a mesma pessoa pode aparecer mais de uma vez?}
+
+A mesma pessoa pode aparecer mais de uma vez porque a unidade é a nomeação (e não o indivíduo). Se a mesma pessoa foi nomeada para mais de um cargo dentro do período analisado, ela gera uma linha para cada nomeação. Por isso a base tem 890 observações referentes a 568 funcionários públicos.
+
+\textcolor{steelblue}{5. Quais são as duas pastas comparadas no artigo?}
+
+As suas pastas comparadas no artigo são a da cultura (Ministério da Cultura/Secretaria Especial da Cultura) e da agricultura (Ministério da Agricultura, Pecuária e Abastecimento).
+
+### 2. Leitura e validação dos dados
+
+\textcolor{steelblue}{Importe a base no R e apresente:}
+
+\textcolor{steelblue}{1. Número de linhas e colunas.}
+
+```{r}
+# Carregar os pacotes básicos
+
+library(readxl)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(ggpattern)
+library(RColorBrewer)
+library(kableExtra)
+
+# Ler a base de dados do clone criado no repositório (pasta '/dados')
+
+df <- read_xlsx("../dados/BASE_cargos2.xlsx", "BASE_cargos", na = "NA")
+
+codebook <- read_xlsx("../dados/BASE_cargos2.xlsx", "Codebook")
+
+# Revelar o número de linhas e colunas do df
+
+c(linhas = nrow(df), colunas = ncol(df))
+```
+
+\textcolor{steelblue}{2. Nomes das variáveis.}
+
+```{r}
+# Mostrar o nome das colunas do df
+
+names(df)
+```
+
+\textcolor{steelblue}{3. Número de observações por \texttt{orgao\_sup}.}
+
+```{r}
+# Ler o número de observações por 'orgao_sup' em df
+
+df |>
+  count(orgao_sup, name = "n")
+```
+
+\textcolor{steelblue}{4. Número de valores ausentes em pelo menos cinco variáveis relevantes.}
+
+```{r}
+# Contar o número de valores ausentes em variáveis relevantes em df
+
+df |>
+  summarise(across(c(nivel, instr, area, inst_ensino, inst_origem), ~ sum(is.na(.)), .names = "na_{col}"))
+```
+
+\textcolor{steelblue}{5. Uma checagem dos valores observados em \texttt{exp\_adm}, \texttt{exp\_car}, \texttt{nivel}, \texttt{instr} e \texttt{indicacao}.}
+
+```{r}
+# Checar valores observados em 'exp_adm', 'exp_car', 'nivel', 'instr' e 'indicacao' em df
+
+df |>
+  group_by(exp_adm) |>
+  summarize(n = n(), .groups = "drop")
+
+df |>
+  group_by(exp_car) |>
+  summarize(n = n(), .groups = "drop")
+
+df |>
+  group_by(nivel) |>
+  summarize(n = n(), .groups = "drop")
+
+df |>
+  group_by(instr) |>
+  summarize(n = n(), .groups = "drop")
+
+df |>
+  group_by(indicacao) |>
+  summarize(n = n(), .groups = "drop")
+```
+
+\textcolor{steelblue}{Depois, explique qualquer problema encontrado. Por exemplo, algumas variáveis que deveriam ser
+binárias podem ter valores inesperados. Diga como você tratou esses casos.}
+
+De acordo com o *codebook* do artigo, a variável `exp_adm` é binária, podendo assumir, portanto, apenas os valores `0` e `1`. Na base de dados, há, no entanto, uma linha anotada com o valor `3` e três outras anotadas com a *string* `` `1 ``. Para corrigir esse problema, aquela primeira foi alterada para `NA` e estas últimas foram cambiadas para `1`, mediante a execução das linhas de código abaixo:
+
+```{r}
+# Corrigir valores inadequados na variável 'exp_adm' em df
+
+df <- df |>
+  mutate(
+    exp_adm = str_remove_all(as.character(exp_adm), "`"),
+    exp_adm = case_when(
+      exp_adm == "3" ~ NA_real_,
+      TRUE ~ as.numeric(exp_adm)
+    )
+  )
+
+## Validar correção de valores inadequados na variável 'exp_adm' em df
+
+df |>
+  group_by(exp_adm) |>
+  summarize(n = n(), .groups = "drop")
+```
+
+Problema análogo foi notado com relação à variável `exp_car`. Segundo o codebook, a variável deveria assumir apenas os valores `1` (experiência prévia em cargos DAS/FCPE 1-2), `2` (experiência prévia em cargos DAS/FCPE 3-4) e `3` (experiência prévia em cargos DAS 5-6). Entretanto, na base de dados, observaram-se cinco valores únicos (`0`, `1`, `2`, `3` e `5`). A hipótese preliminar para realizar a imputação foi a de que --- à exceção de duas linhas classificadas como `2` --- a anotação teria sido feita inadvertidamente tendo em mente os limites inferiores dos intervalos de classe (*i.e.*, `1` designaria "experiência prévia em cargos DAS/FCPE \underline{1}-2", `3` designaria "experiência prévia em cargos DAS/FCPE \underline{3}-4" e `5` designaria "experiência prévia em cargos DAS \underline{5}-6"). Por sua vez, `0` significaria ausência de experiência prévia na administração pública.
+
+Para testar essa hipótese, cruzou-se `exp_car` com `nivel`. Caso os valores `3` e `5` fossem, em realidade, codificações concorrentes para o mesmo intervalo de classe "experiência prévia em cargos DAS 5-6" (hipótese alternativa), teriam, cada qual, distribuições parecidas entre os níveis.
+
+```{r, fig.width=8, fig.height=4.5}
+# Testar hipótese preliminar para imputação de dados na variável 'exp_car'
+
+df |>
+  count(nivel, exp_car) |>
+  group_by(nivel) |>
+  mutate(prop = round(n / sum(n), 3)) |>
+  arrange(nivel, exp_car)
+
+## Verificar graficamente os resultados do teste de hipótese
+
+rotulos <- c(
+  "0" = "0 (Sem Exp. Pr.)",
+  "1" = "1 (Exp. Pr. DAS/FCPE 1-2)",
+  "2" = "2 (Exp. Pr. DAS/FCPE 3-4)",
+  "3" = "3 (Exp. Pr. DAS/FCPE 3-4)",
+  "5" = "5 (Exp. Pr. DAS 5-6)"
+)
+
+cores <- c(
+  "0" = "white",
+  "1" = "#E0E0E0",
+  "2" = "#C0C0C0",
+  "3" = "#808080",
+  "5" = "#404040"
+)
+
+padroes <- c("0" = "stripe", "1" = "none", "2" = "none",
+             "3" = "none", "5" = "none")
+
+df |>
+  filter(!is.na(exp_car)) |>
+  mutate(
+    nivel   = factor(nivel),
+    exp_car = factor(exp_car, levels = c(0, 1, 2, 3, 5))
+  ) |>
+  count(nivel, exp_car) |>
+  group_by(nivel) |>
+  mutate(prop = n / sum(n)) |>
+  ungroup() |>
+  ggplot(aes(x = nivel, y = prop, fill = exp_car, pattern = exp_car)) +
+  geom_col_pattern(
+    position = position_fill(reverse = TRUE),
+    colour = "black",
+    linewidth = 0.2,
+    pattern_fill = "gray30",
+    pattern_colour = "gray30",
+    pattern_density = 0.00001,
+    pattern_spacing = 0.015,
+    pattern_key_scale_factor = 0.6
+  ) +
+  scale_fill_manual(values = cores, labels = rotulos) +
+  scale_pattern_manual(values = padroes, labels = rotulos) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    x = "Nível do cargo ocupado",
+    y = "Proporção",
+    fill = "exp_car",
+    pattern = "exp_car",
+    title = "Composição de exp_car por nível hierárquico"
+  ) +
+  guides(
+    fill = guide_legend(override.aes = list(
+      pattern = c("stripe", "none", "none", "none", "none")
+    )),
+    pattern = "none"
+  ) +
+  theme_bw(base_size = 10)
+```
+
+Como o valor `3` predominou nos níveis inferiores e o valor `5` cresceu monotonicamente até ser maioria no nível (DAS) 6, há indício de que eles de fato designam faixas distintas. Para checar se essa diferença é consistente e não apenas fruto do acaso, aplicamos o teste qui-quadrado de Pearson $(\chi^2)$, de modo a avaliar se a distribuição de `3` e `5` depende do nível hierárquico.
+
+```{r}
+# Testar o qui-quadrado de Pearson
+
+tab <- df |>
+  filter(exp_car %in% c(3, 5)) |>
+  count(nivel, exp_car) |>
+  tidyr::pivot_wider(names_from = exp_car, values_from = n, values_fill = 0) |>
+  tibble::column_to_rownames("nivel") |>
+  as.matrix()
+
+tab
+
+chisq.test(tab)
+```
+
+O resultado ($\chi^2 = 203,48; gl = 2; p < 0,001$) permite que se rejeite a hipótese de independência, corroborando o diagnóstico segundo o qual os dois valores correspondem a faixas distintas (3-4 e 5-6) e dando suporte à imputação pela escala ancorada no piso de cada intervalo.
+
+```{r}
+# Corrigir valores inadequados na variável 'exp_car' em df
+
+df <- df |>
+  mutate(
+    exp_car_imputado = is.na(exp_car),
+    exp_car = case_when(
+      exp_car == 2   ~ 2,
+      exp_car == 3   ~ 2,
+      exp_car == 5   ~ 3,
+      TRUE ~ exp_car
+    )
+  )
+
+## Validar correção de valores inadequados na variável 'exp_car' em df
+
+df |>
+  group_by(exp_car) |>
+  summarize(n = n(), .groups = "drop")
+```
+
+Com relação à variável `instr`, notou-se codificações concorrentes para o nível de instrução "ensino superior completo", quais sejam, `superior`, com 297 entradas; e `graduacao`, com 1 entrada). Para corrigir esse erro, este último rótulo foi eliminado, com sua entrada correspondente sendo anotada como `superior`.
+
+```{r}
+# Corrigir valores inadequados na variável 'instr' em df
+
+df <- df |>
+  mutate(
+    instr = case_when(
+      instr == "graduacao" ~ "superior",
+      TRUE ~ instr
+    )
+  )
+
+## Validar correção de valores inadequados na variável 'instr' em df
+
+df |>
+  group_by(instr) |>
+  summarize(n = n(), .groups = "drop")
+```
+
+Por fim, no tocante ao campo `indicacao`, observou-se que alguns registros estavam incoerentes com as datas de posse dos presidentes, trazendo um presidente que não correspondia à data de entrada no cargo (*e.g.*, uma nomeação com entrada em 2005, ainda sob Lula, registrada como Rousseff).
+
+```{r}
+posses <- as.Date(c("2011-01-01", "2016-05-12", "2019-01-01"))
+
+cores <- c(
+  "Lula"      = "white",
+  "Rousseff"  = "grey80",
+  "Temer"     = "grey55",
+  "Bolsonaro" = "grey35"
+)
+
+df |>
+  filter(!is.na(entrada), !is.na(indicacao)) |>
+  mutate(
+    entrada   = as.Date(entrada),
+    indicacao = factor(indicacao,
+                       levels = c("Lula", "Rousseff", "Temer", "Bolsonaro"))
+  ) |>
+  ggplot(aes(x = entrada, y = indicacao, fill = indicacao)) +
+  geom_vline(xintercept = posses, linetype = "dashed",
+             colour = "grey40", linewidth = 0.4) +
+  geom_point(shape = 21, colour = "grey30", size = 1.8,
+             alpha = 0.8, position = position_jitter(height = 0.15, width = 0)) +
+  scale_fill_manual(values = cores) +
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y") +
+  labs(
+    x = "Data de entrada no cargo",
+    y = "Presidente registrado",
+    fill = "Presidente",
+    title = "Data de nomeação e presidente registrado"
+  ) +
+  theme_bw(base_size = 9)
+```
+
+A correção consistiu em reatribuir o presidente a partir da data de entrada no cargo, que marca o momento da nomeação, comparando-a com o período de cada mandato.
+
+```{r}
+# Corrigir valores inadequados na variável 'indicacao' em df
+
+limites <- tibble::tibble(
+  indicacao = c("Lula", "Rousseff", "Temer", "Bolsonaro"),
+  inicio    = as.Date(c("2003-01-01", "2011-01-01", "2016-05-12", "2019-01-01")),
+  fim       = as.Date(c("2010-12-31", "2016-05-11", "2018-12-31", "2022-12-31"))
+)
+
+df <- df |>
+  mutate(
+    entrada = as.Date(entrada),
+    indicacao = case_when(
+      entrada <= as.Date("2010-12-31") ~ "Lula",
+      entrada <= as.Date("2016-05-11") ~ "Rousseff",
+      entrada <= as.Date("2018-12-31") ~ "Temer",
+      entrada <= as.Date("2022-12-31") ~ "Bolsonaro",
+      TRUE ~ NA_character_
+    )
+  )
+
+## Validar correção de valores inadequados na variável 'indicacao' em df
+
+df |>
+  group_by(indicacao) |>
+  summarize(n = n(), .groups = "drop")
+
+### Verificar os casos <NA>
+
+df |>
+  filter(is.na(indicacao)) |>
+  mutate(
+    causa = case_when(
+      is.na(entrada)                      ~ "entrada ausente",
+      entrada > as.Date("2022-12-31")     ~ "posterior ao recorte",
+      TRUE                                ~ "outra"
+    )
+  ) |>
+  select(chave, id, entrada, saida, causa)
+
+### Validar graficamente a correção de valores inadequados na variável 'indicacao' em df
+
+posses <- as.Date(c("2011-01-01", "2016-05-12", "2019-01-01"))
+
+cores <- c(
+  "Lula"      = "white",
+  "Rousseff"  = "grey80",
+  "Temer"     = "grey55",
+  "Bolsonaro" = "grey35"
+)
+
+df |>
+  filter(!is.na(entrada), !is.na(indicacao)) |>
+  mutate(
+    entrada   = as.Date(entrada),
+    indicacao = factor(indicacao,
+                       levels = c("Lula", "Rousseff", "Temer", "Bolsonaro"))
+  ) |>
+  ggplot(aes(x = entrada, y = indicacao, fill = indicacao)) +
+  geom_vline(xintercept = posses, linetype = "dashed",
+             colour = "grey40", linewidth = 0.4) +
+  geom_point(shape = 21, colour = "grey30", size = 1.8,
+             alpha = 0.8, position = position_jitter(height = 0.15, width = 0)) +
+  scale_fill_manual(values = cores) +
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y") +
+  labs(
+    x = "Data de entrada no cargo",
+    y = "Presidente registrado",
+    fill = "Presidente",
+    title = "Data de nomeação e presidente registrado"
+  ) +
+  theme_bw(base_size = 9)
+```
+
+### 3. Tabela descritiva: experiência administrativa
+
+\textcolor{steelblue}{Crie uma variável binária para indicar experiência prévia em órgãos da administração pública. Use o \textit{codebook} para justificar a escolha.}
+
+Essa variável já existe no *codebook* (`exp_adm`), no qual é definida como "experiência em órgãos da administração pública" e se indica que assume os valores `1` (sim) e `0` (não).
+
+\color{steelblue}
+
+Depois, filtre a base para \texttt{orgao\_sup} igual a \texttt{mapa} ou \texttt{minc} e apresente uma tabela com:
+
+\begin{enumerate}[nosep]
+
+  \item Número de observações válidas por pasta.
+
+  \item Número de pessoas/nomeações com experiência administrativa.
+
+  \item Proporção com experiência administrativa.
+
+  \item Intervalo de confiança de 95\% para essa proporção.
+
+  \item Margem de erro associada ao intervalo de confiança.
+
+\end{enumerate}
+
+\color{black}
+
+```{r}
+# Exibir tabela com estatísticas de 'exp_adm' por pasta em df
+
+df |>
+  # Filtrar a base para as pastas do artigo ('mapa' e 'minc')
+  filter(orgao_sup %in% c("mapa", "minc")) |>
+  # Agrupar as operações por pasta
+  group_by(orgao_sup) |>
+  summarize(
+    # Contar observações válidas (não-ausentes em 'exp_adm')
+    n = sum(!is.na(exp_adm)),
+    # Contar nomeações com experiência administrativa prévia
+    k = sum(exp_adm == 1, na.rm = TRUE),
+    # Calcular a proporção com experiência administrativa
+    prop = k / n,
+    # Extrair os limites inferior e superior do IC de 95% (método de Wilson)
+    lower = prop.test(k, n, correct = FALSE)$conf.int[1],
+    upper = prop.test(k, n, correct = FALSE)$conf.int[2],
+    # Derivar a margem de erro a partir da amplitude do intervalo
+    margem_erro = (upper - lower) / 2,
+    .groups = "drop"
+  ) |>
+  # Formatar a saída como tabela para o PDF
+  kable(
+    digits = 3,
+    col.names = c("Pasta", "N válido", "Com exp.", "Proporção",
+                  "IC 95% (inf.)", "IC 95% (sup.)", "Margem de erro"),
+    caption = "Experiência prévia em administração pública, por pasta"
+  )
+```
+
+\textcolor{steelblue}{Interprete os resultados em linguagem substantiva. A interpretação deve mencionar explicitamente o que significa o intervalo de confiança e o que significa a margem de erro.}
+
+A experiência prévia em administração pública é alta nas duas pastas. No MAPA, 482 das 524 nomeações válidas foram de pessoas que já haviam ocupado cargo público (92,0%). No MinC, foram 312 das 354 (88,1%). A diferença entre as duas fica em torno de 4 pontos percentuais, com o MAPA à frente.
+
+O intervalo de confiança de 95% indica a faixa de valores plausíveis para a proporção real, dado que estamos trabalhando com uma amostra e não com o universo completo de nomeações. No MAPA, essa faixa vai de 89,3% a 94,0%. No MinC, de 84,4% a 91,1%. A leitura correta é: se repetíssemos esse procedimento de amostragem muitas vezes, cerca de 95% dos intervalos construídos dessa forma conteriam a proporção verdadeira.
+
+A margem de erro mede a precisão da estimativa. Ela é a distância entre a proporção estimada e cada extremo do intervalo. No MAPA é de 2,3 pontos percentuais e no MinC de 3,4 pontos. O MinC tem margem maior porque sua base é menor (354 contra 524 observações), e amostras menores geram estimativas menos precisas.
+
+### 4. Primeiro teste de hipótese bivariado
+
+\color{steelblue}
+
+Teste a hipótese de que a proporção de nomeações com experiência administrativa é igual nas duas pastas.
+
+Use a aproximação normal para a diferença entre proporções.
+
+No relatório, apresente:
+
+\begin{enumerate}[nosep]
+
+  \item Hipótese nula.
+  \item Hipótese alternativa.
+  \item Teste usado no R.
+  \item P-valor.
+  \item Decisão usando nível de significância de 5\%.
+  \item Interpretação substantiva.
+  
+\end{enumerate}
+
+Importante: não escreva apenas "rejeita" ou "não rejeita". Explique o que o p-valor quer dizer nesse caso.
+
+\color{black}
+
+```{r}
+# Obter k e n por pasta
+
+tab <- df |>
+  group_by(orgao_sup) |>
+  summarize(
+    k = sum(exp_adm == 1, na.rm = TRUE),
+    n = sum(!is.na(exp_adm)),
+    p_hat = k / n,
+    .groups = "drop"
+  )
+
+k1 <- tab$k[tab$orgao_sup == "minc"]
+n1 <- tab$n[tab$orgao_sup == "minc"]
+p1 <- tab$p_hat[tab$orgao_sup == "minc"]
+
+k2 <- tab$k[tab$orgao_sup == "mapa"]
+n2 <- tab$n[tab$orgao_sup == "mapa"]
+p2 <- tab$p_hat[tab$orgao_sup == "mapa"]
+
+# Obter a estatística z
+
+p_pool <- (k1 + k2) / (n1 + n2)
+
+z <- (p1 - p2) / sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2))
+
+p_value <- 2 * (1 - pnorm(abs(z)))
+
+# Calcular o intervalo de confiança para a diferença
+
+zcrit <- qnorm(0.975)
+
+se_diff <- sqrt(p1*(1-p1)/n1 + p2*(1-p2)/n2)
+
+ci_lower <- (p1 - p2) - zcrit * se_diff
+
+ci_upper <- (p1 - p2) + zcrit * se_diff
+
+# Exibir os resultados da análise
+
+data.frame(
+  k1 = k1, n1 = n1, p1 = p1,
+  k2 = k2, n2 = n2, p2 = p2,
+  p_pool = p_pool, z = z, p_value = p_value,
+  diff = p1 - p2, ci_lower = ci_lower, ci_upper = ci_upper
+)
+```
+
+Testou-se a hipótese nula de que as duas pastas têm a mesma proporção de nomeações com experiência administrativa prévia, ou seja, de que a diferença entre elas é zero, contra a hipótese alternativa de que essas proporções diferem (teste bilateral). Utilizou-se, para tanto, o teste z para diferença entre duas proporções. A proporção foi de 92,0% no MAPA e 88,1% no MinC, uma diferença de 3,85 pontos percentuais a favor do MAPA, com p-valor de 0,057 (z = -1,90). Esse p-valor indica que, se as duas pastas tivessem de fato a mesma proporção, haveria cerca de 5,7% de chance de observar uma diferença tão grande quanto essa (ou maior) apenas por variação amostral. Como essa chance está acima do limiar de 5% que adotamos, não se rejeita a hipótese nula, e não há evidência suficiente para afirmar que as pastas diferem nesse aspecto. Vale notar que o resultado fica muito perto do limiar elegido, e o intervalo de confiança da diferença (de -7,94 a 0,24 pontos percentuais) inclui o zero por pouco. Os dados apontam, portanto, uma tendência de maior experiência prévia no MAPA, mas essa tendência não é forte o bastante para ser considerada estatisticamente robusta.
+
+### 5. Segundo teste de hipótese bivariado
+
+\textcolor{steelblue}{Crie uma variável chamada \texttt{alto\_nivel}, igual a 1 quando \texttt{nivel} for 5 ou 6, e 0 quando \texttt{nivel} for 4.}
+
+```{r}
+# Criar a variável 'alto_nivel'
+
+df <- df |>
+  mutate(alto_nivel = case_when(
+    nivel == 4 ~ 0,
+    nivel == 5 ~ 1,
+    nivel == 6 ~ 1,
+    TRUE       ~ NA_real_
+  ))
+```
+
+\color{steelblue}
+
+Compare a proporção de cargos de alto nível entre \texttt{mapa} e \texttt{minc}.
+
+Use novamente a aproximação normal para a diferença entre proporções.
+
+Apresente:
+
+\begin{enumerate} [nosep]
+
+  \item Uma tabela com as proporções por pasta.
+  \item Um intervalo de confiança de 95% para cada proporção.
+  \item Um teste de hipótese para a diferença entre as proporções.
+  \item O p-valor e sua interpretação.
+  \item Uma conclusão substantiva: a diferença parece grande, pequena ou irrelevante do ponto de vista substantivo?
+  
+\end{enumerate}
+
+\color{black}
+
+```{r}
+# Obter k, n e proporção de cargos de alto nível por pasta ('mapa' e 'minc')
+tab2 <- df |>
+  filter(orgao_sup %in% c("mapa", "minc")) |>
+  group_by(orgao_sup) |>
+  summarize(
+    k = sum(alto_nivel == 1, na.rm = TRUE),
+    n = sum(!is.na(alto_nivel)),
+    p_hat = k / n,
+    .groups = "drop"
+  )
+
+# Separar os valores de cada pasta
+k1 <- tab2$k[tab2$orgao_sup == "minc"]
+n1 <- tab2$n[tab2$orgao_sup == "minc"]
+p1 <- tab2$p_hat[tab2$orgao_sup == "minc"]
+k2 <- tab2$k[tab2$orgao_sup == "mapa"]
+n2 <- tab2$n[tab2$orgao_sup == "mapa"]
+p2 <- tab2$p_hat[tab2$orgao_sup == "mapa"]
+
+# Definir o valor crítico z para 95%
+zcrit <- qnorm(0.975)
+
+# Calcular o IC de 95% de cada proporção pela aproximação normal (Wald)
+se1 <- sqrt(p1 * (1 - p1) / n1)
+se2 <- sqrt(p2 * (1 - p2) / n2)
+ci1 <- c(p1 - zcrit * se1, p1 + zcrit * se1)
+ci2 <- c(p2 - zcrit * se2, p2 + zcrit * se2)
+
+# Calcular a estatística z para a diferença de proporções (variância combinada)
+p_pool <- (k1 + k2) / (n1 + n2)
+z <- (p1 - p2) / sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2))
+p_value <- 2 * (1 - pnorm(abs(z)))
+
+# Calcular o IC de 95% para a diferença entre as proporções (Wald)
+se_diff <- sqrt(p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2)
+ci_lower <- (p1 - p2) - zcrit * se_diff
+ci_upper <- (p1 - p2) + zcrit * se_diff
+
+# Montar a tabela de proporções e ICs por pasta (itens 1 e 2)
+tab_prop <- data.frame(
+  orgao_sup = c("minc", "mapa"),
+  k = c(k1, k2),
+  n = c(n1, n2),
+  p_hat = c(p1, p2),
+  ci_inf = c(ci1[1], ci2[1]),
+  ci_sup = c(ci1[2], ci2[2])
+)
+
+# Exibir a tabela de proporções por pasta com IC de 95%
+tab_prop |>
+  kbl(
+    digits = 3,
+    booktabs = TRUE,
+    col.names = c("Pasta", "Alto nível", "N válido", "Proporção",
+                  "IC 95% (inf.)", "IC 95% (sup.)"),
+    caption = "Proporção de cargos de alto nível (DAS 5-6) por pasta"
+  ) |>
+  kable_styling(latex_options = c("hold_position"))
+
+# Montar a tabela do teste de diferença de proporções (itens 3 e 4)
+tab_diff <- data.frame(
+  diff = p1 - p2,
+  z = z,
+  p_value = p_value,
+  ci_lower = ci_lower,
+  ci_upper = ci_upper
+)
+
+# Exibir os resultados do teste z para a diferença entre as proporções
+tab_diff |>
+  kbl(
+    digits = 3,
+    booktabs = TRUE,
+    col.names = c("Diferença (MinC - MAPA)", "Estatística z", "P-valor",
+                  "IC 95% (inf.)", "IC 95% (sup.)"),
+    caption = "Teste z para a diferença de proporções entre as pastas"
+  ) |>
+  kable_styling(latex_options = c("hold_position"))
+```
+
+A proporção de cargos de alto nível (DAS 5-6) foi de 42,5% no MinC e 35,6% no MAPA, uma diferença de 6,8 pontos percentuais a favor do MinC. O teste z resultou em p-valor de 0,039 (z = 2,065). Esse p-valor indica que, se as duas pastas tivessem de fato a mesma proporção, haveria cerca de 3,9% de chance de observar uma diferença tão grande quanto essa (ou maior) apenas por variação amostral. Como essa chance está abaixo do limiar de 5%, rejeita-se a hipótese nula, e há evidência de que as pastas diferem. O intervalo de confiança da diferença, de 0,3 a 13,4 pontos percentuais, não inclui o zero, o que é coerente com a rejeição.
+
+Do ponto de vista substantivo, a diferença é moderada. São cerca de 7 pontos percentuais a mais de cargos de alto escalão no MinC, um contraste significativo. Entretanto, o intervalo de confiança é largo (de 0,3 a 13,4 pontos), de modo que a diferença pode ser pequena ou expressiva. Em síntese, há diferença, mas a amostra não permite "cravar" seu tamanho.
+
+### 6. Significância estatística e nível de significância
+
+\color{steelblue}
+
+Escolha um dos dois testes anteriores e responda:
+
+\begin{enumerate} [nosep]
+
+  \item A conclusão mudaria se o nível de significância fosse 10\%?
+  \item A conclusão mudaria se o nível de significância fosse 1\%?
+  \item O que esse exercício mostra sobre a diferença entre p-valor e significância substantiva?
+  
+\end{enumerate}
+
+\color{black}
+
+Tomando por referência o primeiro teste de hipótese bivariado, sobre a proporção de nomeações com experiência administrativa nas duas pastas (p-valor de 0,057; z = -1,90), a conclusão mudaria ao nível de significância de 10%, já que 0,057 fica abaixo desse limiar e levaria a rejeitar a hipótese nula, ao contrário da decisão tomada a 5%. Ao nível de 1%, a conclusão não mudaria, pois 0,057 permanece acima de 0,01 e a hipótese nula continuaria não rejeitada. Essa distinção mostra que a decisão depende do limiar de significância adotado, que é *convencionado* --- e não uma propriedade dos dados. O mesmo p-valor produz três leituras conforme o nível escolhido, mas a diferença observada entre as pastas continua a mesma (em torno de 4 pontos percentuais). O p-valor mede a probabilidade de observar essa diferença caso não houvesse distinção real, ao passo que a relevância substantiva depende da magnitude e do contexto. Para determinar esta última, o foco não recai, portanto, sobre o limiar convencionado; depende, em realidade, de uma avaliação empiricamente contextualizada (*i.e.*, se 4 pontos percentuais de experiência administrativa a mais no MAPA têm peso substantivo para entender os perfis burocráticos das duas pastas).
+
+### 7. O que aconteceria se a amostra fosse maior?
+
+\color{steelblue}
+
+Escolha uma das proporções estimadas nas perguntas anteriores.
+
+Suponha que a proporção observada fosse a mesma, mas o número de observações fosse duas vezes maior.
+
+Responda:
+
+\begin{enumerate} [nosep]
+
+  \item O que tenderia a acontecer com o erro-padrão?
+  \item Por que isso acontece?
+  
+\end{enumerate}
+
+\color{black}
+
+Tomando por referência o segundo teste de hipótese bivariado, sobre a proporção de cargos de alto nível (DAS 5-6) nas duas pastas, escolhe-se a proporção estimada para o MinC (42,5%, com 155 cargos de alto nível em 365 observações válidas). Caso a proporção observada permanecesse a mesma, mas o número de observações dobrasse, o erro-padrão tenderia a diminuir. Isso ocorre porque o erro-padrão de uma proporção é dado por $\sqrt{p(1-p)/n}$, de modo que o $n$ aparece no denominador, sob a raiz. Como a proporção $p$ seguiria idêntica, apenas o $n$ mudaria, e dobrá-lo reduziria o erro-padrão por um fator de $\sqrt{2}$ (cerca de 29%). A intuição por trás disso é que amostras maiores fornecem estimativas mais precisas da proporção real, reduzindo a incerteza em torno dela. Como consequência, o intervalo de confiança ficaria mais estreito e a margem de erro menor, ainda que a estimativa pontual não se alterasse.
+
+## Perguntas exclusivas para pós-graduação
+
+### P1. Unidade de análise: nomeação ou indivíduo?
+
+\color{steelblue}
+
+A base tem a nomeação como unidade de análise, mas uma mesma pessoa pode aparecer mais de uma vez.
+
+Construa uma versão da base com uma linha por `id`. Explique a regra usada para lidar com pessoas que aparecem mais de uma vez. Depois, repita um dos testes obrigatórios.
+
+Responda:
+
+\begin{enumerate} [nosep]
+
+  \item O resultado muda quando a unidade passa de nomeação para indivíduo?
+  
+  \item Qual unidade de análise é mais adequada para a pergunta que você está respondendo?
+  
+\end{enumerate}
+
+\color{black}
+
+```{r}
+# Construir a base de dados no nível da chave 'id' + 'orgao_sup'
+
+df_pessoa <- df |>
+  filter(orgao_sup %in% c("mapa", "minc")) |>
+  mutate(
+    entrada = as.Date(entrada),
+    saida   = as.Date(saida)
+  ) |>
+  arrange(id, orgao_sup, entrada) |>
+  group_by(id, orgao_sup) |>
+  summarize(
+    n_nomeacoes    = n(),
+    chaves         = paste(chave, collapse = "; "),
+    nivel_primeiro = first(nivel),
+    nivel_max      = max(nivel, na.rm = TRUE),
+    alto_nivel_max = as.integer(any(nivel %in% c(5, 6))),
+    setores        = paste(unique(setor), collapse = "; "),
+    n_setores      = n_distinct(setor),
+    area           = first(area),
+    inst_ensino    = first(inst_ensino),
+    inst_origem    = first(inst_origem),
+    instr_primeiro = first(instr),
+    instr_final    = last(instr),
+    partido_primeiro   = first(partido),
+    partido_mudou      = as.integer(n_distinct(partido[!is.na(partido)]) > 1),
+    n_partidos         = n_distinct(partido[!is.na(partido)]),
+    car_pub_primeira   = first(car_pub),
+    car_pub_mudou      = as.integer(n_distinct(car_pub) > 1),
+    indicacao_primeira = first(indicacao),
+    n_presidentes      = n_distinct(indicacao),
+    UF_primeira        = first(`UF*`),
+    UF_mudou           = as.integer(n_distinct(`UF*`[!is.na(`UF*`)]) > 1),
+    partido_pr_prim       = first(partido_pr),
+    partido_ministro_prim = first(partido_ministro),
+    cargo_ele_prev  = first(cargo_ele),
+    cargo_ele_ever  = as.integer(any(cargo_ele == 1, na.rm = TRUE)),
+    lid_part_prev   = first(lid_part),
+    lid_part_ever   = as.integer(any(lid_part == 1, na.rm = TRUE)),
+    exp_adm_prev    = first(exp_adm),
+    exp_adm_ever    = as.integer(any(exp_adm == 1, na.rm = TRUE)),
+    exp_mer_prev    = first(exp_mer),
+    exp_mer_ever    = as.integer(any(exp_mer == 1, na.rm = TRUE)),
+    exp_soc_prev    = first(exp_soc),
+    exp_soc_ever    = as.integer(any(exp_soc == 1, na.rm = TRUE)),
+    exp_car_prev    = first(exp_car),
+    exp_car_max     = max(exp_car, na.rm = TRUE),
+    entrada_primeira = min(entrada, na.rm = TRUE),
+    saida_ultima     = max(saida, na.rm = TRUE),
+    perm_total       = sum(perm, na.rm = TRUE),
+    perm_media       = mean(perm, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Reperformar o primeiro teste de hipótese bivariado
+
+tab_pp <- df_pessoa |>
+  group_by(orgao_sup) |>
+  summarize(
+    k = sum(exp_adm_prev == 1, na.rm = TRUE),
+    n = sum(!is.na(exp_adm_prev)),
+    p_hat = k / n,
+    .groups = "drop"
+  )
+
+k1 <- tab_pp$k[tab_pp$orgao_sup == "minc"]
+n1 <- tab_pp$n[tab_pp$orgao_sup == "minc"]
+k2 <- tab_pp$k[tab_pp$orgao_sup == "mapa"]
+n2 <- tab_pp$n[tab_pp$orgao_sup == "mapa"]
+
+prop.test(c(k1, k2), c(n1, n2), correct = FALSE)
+```
+
+Para obter uma linha por pessoa, agrupamos por `id` combinado com `orgao_sup`. A escolha de incluir a pasta no agrupamento resolve o caso de indivíduos que atuaram nos dois ministérios (duas pessoas na base). Assim, em vez de forçá-los a uma pasta só, cada combinação pessoa-pasta gera uma linha, o que preserva a informação sobre ambas as pastas e mantém a coerência com um teste que compara os ministérios entre si.
+
+As variáveis foram tratadas conforme seu comportamento ao longo das nomeações de cada pessoa. As de identificação e da nomeação específica (`chave`, `setor`, `cargo`, `nivel`) foram condensadas em resumos da trajetória, como `n_nomeacoes`, `nivel_max` e `alto_nivel_max`, preservando as chaves originais de modo concatenado (;). Os atributos estáveis dos nomeados (`area`, `inst_ensino`, `inst_origem`) foram mantidos pelo seu valor único; para `instr`, que pode sofrer alterações se a pessoa se titula no período, guardamos o valor inicial e o final. Os atributos que mudam entre nomeações e cuja mudança é informativa (`partido`, `car_pub`, `indicacao`, `UF*`) receberam um valor de referência somado a variáveis que registram a mudança, como `partido_mudou` e `n_partidos`. Por fim, as dicotômicas de experiência (`cargo_ele`, `lid_part`, `exp_adm`, `exp_mer`, `exp_soc`) foram bifurcadas em duas versões, dado que são medidas a cada nomeação: uma `_prev`, com o estado na primeira nomeação (experiência prévia à entrada), e uma `_ever`, indicando se o atributo se tornou verdadeiro (1) em algum momento (experiência adquirida ao longo da trajetória).
+
+O teste repetido foi o primeiro teste bivariado, sobre a proporção com experiência administrativa nas duas pastas, usando a variável `exp_adm_prev`. Optou-se por ela (e não por `exp_adm_ever`), para manter continuidade com o teste original por nomeação, que também media experiência prévia à nomeação; assim, a comparação entre as duas versões isola o efeito da mudança de unidade de análise. A proporção com experiência administrativa prévia foi de 87,2% no MAPA e 83,0% no MinC, uma diferença de cerca de 4 pontos percentuais, com p-valor de 0,160. Como esse valor está acima do limiar de 5%, não se rejeita a hipótese nula, e o intervalo de confiança da diferença (de -10,2 a +1,7 pontos) inclui o zero.
+
+Vale contrastar com o teste original por nomeação, cujo p-valor foi 0,057, próximo do limiar. Ao passar para uma linha por pessoa, o número de observações diminui e a diferença perde significância estatística, ainda que sua magnitude permaneça parecida. Isso separa as duas noções de significância. A diferença substantiva entre as pastas é praticamente a mesma nos dois casos, em torno de 4 pontos; o que muda é apenas a significância estatística, sensível ao tamanho da amostra. Em ambos, contudo, a conclusão se mantém, *i.e.*, não há evidência sólida de que as pastas difiram quanto à experiência administrativa prévia. Para a pergunta de fundo, pode-se dizer que a base por pessoa é a unidade mais adequada, já que o interesse recai sobre o perfil dos indivíduos que ocupam as pastas, não sobre cada nomeação isolada. Contar a mesma pessoa várias vezes infla a amostra e trata como independentes observações que efetivamente não o são.
+
+### P2. Intervalo de confiança para diferença de proporções
+
+\color{steelblue}
+
+Em vez de apresentar apenas intervalos de confiança separados por pasta, calcule um intervalo de confiança para a diferença entre as proporções.
+
+Interprete a diferença em pontos percentuais e diga se o intervalo inclui zero.
+
+\color{black}
+
+```{r}
+# Testar a diferença de proporções (exp_adm_prev) entre as pastas, no nível da pessoa
+
+res_pp <- prop.test(c(k1, k2), c(n1, n2), correct = FALSE)
+
+# Extrair o IC de 95% para a diferença (MinC - MAPA) e converter para pontos percentuais
+
+diff_pp     <- res_pp$estimate[1] - res_pp$estimate[2]
+ci_diff     <- res_pp$conf.int
+
+data.frame(
+  diff_pp_pp   = diff_pp * 100,
+  ci_inf_pp    = ci_diff[1] * 100,
+  ci_sup_pp    = ci_diff[2] * 100,
+  inclui_zero  = ci_diff[1] < 0 & ci_diff[2] > 0
+)
+```
+
+A diferença entre as proporções (calculada no sentido MinC menos MAPA), é de -4,2 pontos percentuais, *i.e.*, a proporção de pessoas com experiência administrativa prévia é cerca de 4 pontos menor no MinC que no MAPA. O intervalo de confiança de 95% para essa diferença vai de -10,2 a +1,7 pontos percentuais. Como o intervalo inclui o zero, não é possível afirmar que as pastas diferem quanto a essa proporção. O valor real da diferença pode ser negativo (menos experiência no MinC), mas também pode ser nulo ou até ligeiramente positivo. Isso é coerente com o p-valor de 0,160 obtido no teste, e reforça a mesma conclusão por outra via, já que um intervalo que cruza o zero equivale a não rejeitar a hipótese nula ao nível de 5%.
